@@ -15,9 +15,7 @@ provider "aws" {
   region = "us-west-2" # Free-tier eligible region
 }
 
-
 data "aws_caller_identity" "current" {}
-
 
 # Step 1: Create an S3 bucket for storing Terraform state or other objects
 resource "aws_s3_bucket" "my_s3_bucket" {
@@ -69,7 +67,6 @@ resource "aws_s3_bucket_policy" "my_s3_bucket_policy" {
 }
 POLICY
 }
-
 
 # Step 3: Create a DynamoDB table for state locking
 resource "aws_dynamodb_table" "terraform_locks" {
@@ -126,33 +123,30 @@ resource "aws_iam_role" "ecs_task_execution_role" {
 resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
   role       = aws_iam_role.ecs_task_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-  # This provides permissions needed by ECS to pull from ECR and execute containers
 }
 
 # Attach S3 full access to the role
 resource "aws_iam_role_policy_attachment" "s3_full_access_policy" {
   role       = aws_iam_role.ecs_task_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
-  # This provides full access to all S3 resources
 }
 
 # Attach DynamoDB full access to the role
 resource "aws_iam_role_policy_attachment" "dynamodb_full_access_policy" {
   role       = aws_iam_role.ecs_task_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
-  # This provides full access to all DynamoDB resources
 }
 
 # Step 7: Define the ECS task definition
 resource "aws_ecs_task_definition" "my_task" {
   family                   = "my-task"
-  network_mode             = "awsvpc"  # Uses AWS VPC for networking
-  requires_compatibilities = ["FARGATE"] # We are using Fargate (serverless)
-  cpu                      = 256       # Minimal CPU (free-tier eligible)
-  memory                   = 512       # Minimal memory (free-tier eligible)
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = 256
+  memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
 
-  # This defines the container that will run in the ECS task
+  # Define the container that will run in the ECS task
   container_definitions = <<DEFINITION
   [
     {
@@ -175,10 +169,10 @@ resource "aws_ecs_task_definition" "my_task" {
 resource "aws_security_group" "ecs_sg" {
   name        = "ecs_sg"
   description = "Allow HTTP traffic on port 3000"
-  vpc_id      = aws_vpc.main.id  # Link to the VPC created or existing VPC
+  vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port   = 3000   # Allows traffic to port 3000 (Node.js app)
+    from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]  # Allow traffic from all IPs
@@ -198,23 +192,24 @@ resource "aws_vpc" "main" {
 }
 
 resource "aws_subnet" "ecs_subnet" {
-  vpc_id                  = aws_vpc.main.id  # Link the subnet to the VPC
-  cidr_block              = "10.0.1.0/24"    # Define the IP range for this subnet
-  availability_zone       = "us-west-2a"     # Choose the availability zone
-  map_public_ip_on_launch = true             # Automatically assign public IP addresses to instances
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-west-2a"
+  map_public_ip_on_launch = true # Automatically assign public IPs to Fargate tasks
 }
 
 # Step 10: Create the ECS service to run the task
 resource "aws_ecs_service" "my_service" {
   name            = "my-service"
-  cluster         = aws_ecs_cluster.my_cluster.id # Link to the ECS cluster
-  task_definition = aws_ecs_task_definition.my_task.arn # Link to the task definition
-  desired_count   = 1   # Number of instances of the container to run
-  launch_type     = "FARGATE" # Use Fargate to avoid managing EC2 instances
+  cluster         = aws_ecs_cluster.my_cluster.id
+  task_definition = aws_ecs_task_definition.my_task.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
 
   # Network configuration for the Fargate task
   network_configuration {
-    subnets         = [aws_subnet.ecs_subnet.id]  # Use the subnet created
-    security_groups = [aws_security_group.ecs_sg.id] # Use the security group created
+    subnets         = [aws_subnet.ecs_subnet.id]
+    security_groups = [aws_security_group.ecs_sg.id]
+    assign_public_ip = true # Ensure public IP assignment for Fargate tasks
   }
 }
